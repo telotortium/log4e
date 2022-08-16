@@ -5,7 +5,7 @@
 ;; Author: Hiroaki Otsu <ootsuhiroaki@gmail.com>
 ;; Keywords: log
 ;; URL: https://github.com/aki2o/log4e
-;; Version: 0.3.3
+;; Version: 0.3.4
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -184,9 +184,9 @@ Evaluation of MSGARGS is invoked only if %s level log should be printed."
       (put-text-property 0 (length timetext) 'face 'font-lock-doc-face timetext)
       (put-text-property 0 (length lvltext) 'face 'font-lock-keyword-face lvltext))
     (let* ((logtext logtmpl)
-           (logtext (replace-regexp-in-string "%t" timetext logtext))
-           (logtext (replace-regexp-in-string "%l" lvltext logtext))
-           (logtext (replace-regexp-in-string "%m" msg logtext))
+           (logtext (replace-regexp-in-string "%t" timetext logtext t t))
+           (logtext (replace-regexp-in-string "%l" lvltext logtext t t))
+           (logtext (replace-regexp-in-string "%m" msg logtext t t))
            (begin (point)))
       (insert logtext "\n")
       (when propertize-p
