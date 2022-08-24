@@ -5,7 +5,7 @@
 ;; Author: Hiroaki Otsu <ootsuhiroaki@gmail.com>
 ;; Keywords: log
 ;; URL: https://github.com/aki2o/log4e
-;; Version: 0.3.4
+;; Version: 0.3.3
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -21,28 +21,28 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; 
+;;
 ;; This extension provides logging framework for elisp.
 
 ;;; Dependency:
-;; 
+;;
 ;; Nothing.
 
 ;;; Installation:
 ;;
 ;; Put this to your load-path.
 ;; And put the following lines in your elisp file.
-;; 
+;;
 ;; (require 'log4e)
 
 ;;; Configuration:
-;; 
+;;
 ;; See <https://github.com/aki2o/log4e/blob/master/README.md>
 ;; Otherwise, eval following sexp.
 ;; (describe-function 'log4e:deflogger)
 
 ;;; API:
-;; 
+;;
 ;; [EVAL] (autodoc-document-lisp-buffer :type 'command :prefix "log4e:" :docstring t)
 ;; `log4e:next-log'
 ;; Move to start of next log on log4e-mode.
@@ -50,15 +50,15 @@
 ;; Move to start of previous log on log4e-mode.
 ;; `log4e:insert-start-log-quickly'
 ;; Insert logging statment for trace level log at start of current function/macro.
-;; 
+;;
 ;;  *** END auto-documentation
-;; 
+;;
 ;; For detail, see <https://github.com/aki2o/log4e/blob/master/README.md>
-;; 
+;;
 ;; [Note] Other than listed above, Those specifications may be changed without notice.
 
 ;;; Tested On:
-;; 
+;;
 ;; - Emacs ... GNU Emacs 23.3.1 (i386-mingw-nt5.1.2600) of 2011-08-15 on GNUPACK
 
 
@@ -102,6 +102,7 @@
 (log4e--def-symmaker "toggle-debugging")
 (log4e--def-symmaker "buffer-coding-system")
 (log4e--def-symmaker "author-mail-address")
+(log4e--def-symmaker "literal-backslash")
 
 (defmacro log4e--def-level-logger (prefix suffix level)
   (let ((argform (if suffix
@@ -109,6 +110,7 @@
                    '(level msg &rest msgargs)))
         (buff (log4e--make-symbol-log-buffer prefix))
         (msgbuff (log4e--make-symbol-msg-buffer prefix))
+        (literalsys (log4e--make-symbol-literal-backslash prefix))
         (codsys (log4e--make-symbol-buffer-coding-system prefix))
         (logtmpl (log4e--make-symbol-log-template prefix))
         (timetmpl (log4e--make-symbol-time-template prefix))
@@ -125,7 +127,7 @@
                   (if suffix "" "LEVEL is symbol as a log level in '(trace debug info warn error fatal).\n"))
          (let ((log4e--current-msg-buffer ,msgbuff))
            (apply 'log4e--logging ,buff ,codsys ,logtmpl ,timetmpl ,minlvl ,maxlvl ,logging-p ,(if suffix level 'level) msg msgargs)))
-       
+
        ;; Define logging macro
        (defmacro ,(intern (concat prefix "--" (or suffix "log") "*")) ,argform
          ,(format "Do logging for %s level log.
@@ -138,16 +140,18 @@ Evaluation of MSGARGS is invoked only if %s level log should be printed."
                (buff (log4e--make-symbol-log-buffer ,prefix))
                (msgbuff (log4e--make-symbol-msg-buffer ,prefix))
                (codsys (log4e--make-symbol-buffer-coding-system ,prefix))
+               (literalsys (log4e--make-symbol-literal-backslash ,prefix))
                (logtmpl (log4e--make-symbol-log-template ,prefix))
                (timetmpl (log4e--make-symbol-time-template ,prefix))
                (minlvl (log4e--make-symbol-min-level ,prefix))
                (maxlvl (log4e--make-symbol-max-level ,prefix))
                (logging-p (log4e--make-symbol-toggle-logging ,prefix)))
-           `(let ((log4e--current-msg-buffer ,msgbuff))
+           `(let ((log4e--current-msg-buffer ,msgbuff)
+                  (log4e--literal-backslash ,literalsys))
               (when (and ,logging-p
                          (log4e--logging-level-p ,minlvl ,maxlvl ,level))
-                (log4e--logging ,buff ,codsys ,logtmpl ,timetmpl ,minlvl ,maxlvl ,logging-p ,level ,msg ,@msgargs)))))
-       
+                (log4e--logging ,buff ,literalsys ,codsys ,logtmpl ,timetmpl ,minlvl ,maxlvl ,logging-p ,level ,msg ,@msgargs)))))
+
        )))
 
 (defsubst log4e--logging-level-p (minlevel maxlevel currlevel)
@@ -176,7 +180,7 @@ Evaluation of MSGARGS is invoked only if %s level log should be printed."
                       (? "." (+ (any "0-9"))) ; precision
                       (any "a-zA-Z"))))
 
-(defsubst log4e--insert-log (logtmpl timetmpl level msg msgargs propertize-p)
+(defsubst log4e--insert-log (logtmpl timetmpl level msg msgargs propertize-p literal-backslash)
   (let ((timetext (format-time-string timetmpl))
         (lvltext (format "%-05s" (upcase (symbol-name level))))
         (buffer-read-only nil))
@@ -210,6 +214,7 @@ Evaluation of MSGARGS is invoked only if %s level log should be printed."
       (goto-char begin))))
 
 (defvar log4e--current-msg-buffer nil)
+(defvar log4e--literal-backslash nil)
 
 ;; We needs this signature be stay for other compiled plugins using old version
 (defun log4e--logging (buffnm codsys logtmpl timetmpl minlevel maxlevel logging-p level msg &rest msgargs)
@@ -221,7 +226,8 @@ Evaluation of MSGARGS is invoked only if %s level log should be printed."
         (let* ((buffer-read-only nil)
                (begin (point))
                (currlog (progn
-                          (log4e--insert-log logtmpl timetmpl level msg msgargs t)
+                          (log4e--insert-log logtmpl timetmpl level msg msgargs t
+                                             log4e--)
                           (goto-char (point-max))
                           (buffer-substring-no-properties begin (point))))
                (msgbuf (or (when (and log4e--current-msg-buffer
@@ -374,7 +380,7 @@ Example:
 12:34:56 [INFO ] done hoge about 'HOGEGE'
 12:35:43 [DEBUG] start do hoge about 'FUGAGA'
 12:35:43 [INFO ] done hoge about 'FUGAGA'
- 
+
 "
   (declare (indent 0))
   (if (or (not (stringp prefix))   (string= prefix "")
@@ -509,7 +515,7 @@ LOG-BUFFER is a buffer which name is \" *log4e-PREFIX*\"."
          (log4e--def-level-logger ,prefix ,(assoc-default 'info  funcnm-alist) 'info)
          (log4e--def-level-logger ,prefix ,(assoc-default 'debug funcnm-alist) 'debug)
          (log4e--def-level-logger ,prefix ,(assoc-default 'trace funcnm-alist) 'trace)
-         
+
          ))))
 
 
